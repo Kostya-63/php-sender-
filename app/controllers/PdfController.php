@@ -51,11 +51,17 @@ class PdfController
         $recipient = $payload['recipient'] ?? [];
         
         // Получаем PDF из сессии или генерируем заново
-        $pdfContent = $payload['pdf_content'] ?? $this->generatePdfContent();
+        $pdfBase64 = $payload['pdf_content'] ?? '';
         $filename = $payload['filename'] ?? 'отчёт.pdf';
 
-        if (!$pdfContent) {
+        if (!$pdfBase64) {
             return ['success' => false, 'message' => '', 'error' => 'PDF не найден'];
+        }
+
+        // Декодируем base64 в бинарные данные
+        $pdfContent = base64_decode($pdfBase64);
+        if (!$pdfContent) {
+            return ['success' => false, 'message' => '', 'error' => 'Ошибка декодирования PDF'];
         }
 
         $service = $this->getMessengerService($channel);
@@ -68,13 +74,21 @@ class PdfController
             return ['success' => false, 'message' => '', 'error' => "Канал '{$channel}' не настроен"];
         }
 
-        $result = $service->send($pdfContent, $filename, $recipient);
+        try {
+            $result = $service->send($pdfContent, $filename, $recipient);
 
-        return [
-            'success' => $result->success,
-            'message' => $result->message,
-            'error' => $result->error,
-        ];
+            return [
+                'success' => $result->success,
+                'message' => $result->message,
+                'error' => $result->error,
+            ];
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'message' => '',
+                'error' => $e->getMessage(),
+            ];
+        }
     }
 
     /**

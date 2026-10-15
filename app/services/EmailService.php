@@ -30,7 +30,18 @@ class EmailService extends MessengerService
                 $this->config['from_name']
             );
             
-            $toEmail = $recipient['email'] ?? $recipient;
+            // Извлекаем email из recipient
+            $toEmail = '';
+            if (is_string($recipient)) {
+                $toEmail = $recipient;
+            } elseif (is_array($recipient) && isset($recipient['email'])) {
+                $toEmail = $recipient['email'];
+            }
+            
+            if (!$toEmail) {
+                return MessengerResult::error('Не указан email получателя');
+            }
+            
             $mail->addAddress($toEmail);
             
             // Содержимое
@@ -43,7 +54,7 @@ class EmailService extends MessengerService
                 <p>С уважением,<br>Студенческий портал</p>
             ";
             
-            // Attachment
+            // Attachment (бинарные данные)
             $mail->addStringAttachment($pdfContent, $filename, 'base64', 'application/pdf');
             
             // Отправка
@@ -52,7 +63,7 @@ class EmailService extends MessengerService
             return MessengerResult::success("PDF отправлен на {$toEmail}");
             
         } catch (Exception $e) {
-            return MessengerResult::error("SMTP ошибка: {$mail->ErrorInfo}");
+            return MessengerResult::error("SMTP ошибка: " . $e->getMessage());
         } catch (\Exception $e) {
             return MessengerResult::error($e->getMessage());
         }
