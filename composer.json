@@ -1,0 +1,14 @@
+{
+    "name": "pdf-sender/app",
+    "description": "PDF Creator and Messenger Sender",
+    "type": "project",
+    "require": {
+        "php": ">=7.4",
+        "mpdf/mpdf": "^8.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/"
+        }
+    }
+}
