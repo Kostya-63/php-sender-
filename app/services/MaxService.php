@@ -35,7 +35,8 @@ class MaxService extends MessengerService
 
     public function isEnabled(): bool
     {
-        return !empty($this->config['token']);
+        return (!empty($this->config['enabled']) && $this->config['enabled']) &&
+               !empty($this->config['token']);
     }
 
     private function getUploadUrl(): array
@@ -95,11 +96,11 @@ class MaxService extends MessengerService
         }
     }
 
-    private function sendMessageWithRetry(string $token, string $filename, mixed $recipient): array
+    private function sendMessageWithRetry(string $token, string $filename, string $recipient): array
     {
-        $userId = $this->config['user_id'] ?? $recipient['max_user_id'] ?? null;
+        $userId = filter_var($recipient, FILTER_VALIDATE_INT);
         if (!$userId) {
-            return ['success' => false, 'error' => 'Не указан user_id для отправки'];
+            return ['success' => false, 'error' => 'Некорректный user_id для Max'];
         }
         
         $url = $this->config['api_url'] . "/messages?user_id={$userId}";

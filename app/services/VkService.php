@@ -26,11 +26,7 @@ class VkService extends MessengerService
             }
             
             // Шаг 4: Отправить сообщение с документом
-            $chatId = $this->config['chat_id'] ?? $recipient['vk_chat_id'] ?? null;
-            if (!$chatId) {
-                return MessengerResult::error('Не указан chat_id для отправки');
-            }
-            
+            $chatId = (string) $recipient;
             $result = $this->sendMessage($chatId, $fileData['file_data'], $filename);
             
             if ($result['success']) {
@@ -46,39 +42,75 @@ class VkService extends MessengerService
 
     public function isEnabled(): bool
     {
-        return !empty($this->config['token']);
+        return (!empty($this->config['enabled']) && $this->config['enabled']) &&
+               !empty($this->config['token']);
     }
 
-    private function getUploadServerUrl(): string
+    private function apiCall(string $method, array $params): array
     {
-        $url = "{$this->apiUrl}/messages.getUploadServer?type=doc&v={$this->version}";
-        $url .= "&chat_id=" . ($this->config['chat_id'] ?? '');
+        $url = "{$this->apiUrl}/{$method}?v={$this->version}&access_token=" . $this->config['token'];
         
         $ch = curl_init();
         curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
+            CURLOPT_URL => $url . '&' . http_build_query($params),
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => ['Authorization: oauth ' . $this->config['token']],
             CURLOPT_TIMEOUT => 30,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
         ]);
         
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        $curlError = curl_error($ch);
+        $curlErrno = curl_errno($ch);
+        
+        if ($response === false || $curlErrno !== 0) {
+            throw new \Exception("cURL ошибка (#{$curlErrno}): {$curlError}");
+        }
         
         if ($httpCode !== 200) {
-            throw new \Exception('Ошибка получения upload server: ' . $response);
+            throw new \Exception("HTTP {$httpCode}: " . substr($response, 0, 500));
+        }
+        
+        if (empty(trim($response))) {
+            throw new \Exception("VK API вернул пустой ответ. URL: " . preg_replace('/access_token=[^&]*/', 'access_token=***', $url . '&' . http_build_query($params)));
         }
         
         $data = json_decode($response, true);
-        if (!isset($data['response']['upload_url'])) {
-            throw new \Exception('Не получен upload_url от VK');
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new \Exception('JSON decode error: ' . json_last_error_msg() . ' | Response: ' . $response);
         }
         
-        return $data['response']['upload_url'];
+        if (isset($data['error_code'], $data['error_msg'])) {
+            throw new \Exception("VK API error {$data['error_code']}: {$data['error_msg']}");
+        }
+        
+        return $data['response'] ?? [];
     }
 
-    private function uploadFile(string $url, string $pdfContent, string $filename): string
+    private function getUploadServerUrl(): string
+    {
+        $params = ['type' => 'doc'];
+        $chatId = $this->config['chat_id'] ?? '';
+        if ($chatId) {
+            // Для групп используем group_id (без минуса)
+            $params['group_id'] = abs((int) $chatId);
+        }
+        
+        $response = $this->apiCall('messages.getUploadServer', $params);
+        
+        if (empty($response)) {
+            throw new \Exception('VK вернул пустой ответ. Params: ' . json_encode($params));
+        }
+        
+        if (!isset($response['upload_url'])) {
+            throw new \Exception('Не получен upload_url от VK. Полный ответ: ' . json_encode($response));
+        }
+        
+        return $response['upload_url'];
+    }
+
+    private function uploadFile(string $url, string $pdfContent, string $filename): array
     {
         $ch = curl_init();
         curl_setopt_array($ch, [
@@ -89,42 +121,40 @@ class VkService extends MessengerService
                 'file' => new \CURLStringFile($pdfContent, $filename, 'application/pdf'),
             ],
             CURLOPT_TIMEOUT => 60,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
         ]);
         
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        $curlError = curl_error($ch);
+        $curlErrno = curl_errno($ch);
+        
+        if ($response === false || $curlErrno !== 0) {
+            throw new \Exception("cURL ошибка (#{$curlErrno}): {$curlError}");
+        }
         
         if ($httpCode !== 200) {
-            throw new \Exception('Ошибка загрузки файла в VK: ' . $response);
+            throw new \Exception("HTTP {$httpCode}: " . substr($response, 0, 500));
         }
-        
-        return $response;
-    }
-
-    private function sendMessage(int $chatId, string $fileData, string $filename): array
-    {
-        $url = "{$this->apiUrl}/messages.send?chat_id={$chatId}&v={$this->version}";
-        $url .= "&attachment=doc" . $fileData;
-        $url .= "&message=" . urlencode("Отчёт: {$filename}");
-        
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => ['Authorization: oauth ' . $this->config['token']],
-            CURLOPT_TIMEOUT => 30,
-        ]);
-        
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
         
         $data = json_decode($response, true);
-        
-        if ($httpCode !== 200 || !isset($data['response'])) {
-            return ['success' => false, 'error' => $data['error']['error_msg'] ?? 'Ошибка отправки'];
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new \Exception('JSON decode error: ' . json_last_error_msg());
         }
+        
+        return $data;
+    }
+
+    private function sendMessage(string $chatId, string $fileData, string $filename): array
+    {
+        $params = [
+            'chat_id' => $chatId,
+            'attachment' => 'doc' . $fileData,
+            'message' => 'Отчёт: ' . $filename,
+        ];
+        
+        $response = $this->apiCall('messages.send', $params);
         
         return ['success' => true];
     }

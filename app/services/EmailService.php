@@ -71,7 +71,8 @@ class EmailService extends MessengerService
 
     public function isEnabled(): bool
     {
-        return !empty($this->config['smtp_host']) && 
+        return (!empty($this->config['enabled']) && $this->config['enabled']) &&
+               !empty($this->config['smtp_host']) && 
                !empty($this->config['smtp_user']) && 
                !empty($this->config['smtp_pass']);
     }

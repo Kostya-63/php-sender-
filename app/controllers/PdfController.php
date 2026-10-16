@@ -48,7 +48,7 @@ class PdfController
     public function send(array $payload): array
     {
         $channel = $payload['channel'] ?? '';
-        $recipient = $payload['recipient'] ?? [];
+        $recipient = $payload['recipient'] ?? '';
         
         // Получаем PDF из сессии или генерируем заново
         $pdfBase64 = $payload['pdf_content'] ?? '';

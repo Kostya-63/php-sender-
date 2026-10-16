@@ -256,10 +256,8 @@
             <h2>📤 Отправить отчёт</h2>
 
             <div class="form-group">
-                <label>Получатель</label>
-                <select id="recipientSelect">
-                    <option value="">Загрузка...</option>
-                </select>
+                <label id="recipientLabel">Адресат</label>
+                <input type="text" id="recipientInput" value="kostikpetrov1986@yandex.ru" placeholder="Введите email или ID">
             </div>
 
             <div class="form-group">
@@ -294,7 +292,6 @@
         let pdfGenerated = false;
         let pdfBase64 = '';
         let selectedChannel = '';
-        let recipients = [];
 
         async function createPdf() {
             const btn = document.getElementById('createBtn');
@@ -343,25 +340,16 @@
             if (!pdfGenerated) return;
 
             const modal = document.getElementById('sendModal');
-            const select = document.getElementById('recipientSelect');
+            const input = document.getElementById('recipientInput');
 
             modal.classList.add('active');
-            select.innerHTML = '<option value="">Загрузка...</option>';
+            input.value = 'kostikpetrov1986@yandex.ru';
+            input.placeholder = 'example@mail.ru';
 
-            try {
-                const response = await fetch('/api/recipients');
-                recipients = await response.json();
-
-                select.innerHTML = '<option value="">Выберите получателя</option>' +
-                    recipients.map(r =>
-                        `<option value="${r.id}">${r.name} — ${r.role} (${r.email})</option>`
-                    ).join('');
-            } catch (error) {
-                select.innerHTML = '<option value="">Ошибка загрузки</option>';
-            }
-
-            selectedChannel = '';
+            // Email выбран по умолчанию
+            selectedChannel = 'email';
             document.querySelectorAll('.channel-option').forEach(el => el.classList.remove('selected'));
+            document.querySelector('[data-channel="email"]').classList.add('selected');
         }
 
         function closeSendModal() {
@@ -372,17 +360,33 @@
             selectedChannel = channel;
             document.querySelectorAll('.channel-option').forEach(el => el.classList.remove('selected'));
             document.querySelector(`[data-channel="${channel}"]`).classList.add('selected');
+            
+            const input = document.getElementById('recipientInput');
+            const label = document.getElementById('recipientLabel');
+            switch(channel) {
+                case 'email':
+                    label.textContent = 'Email';
+                    input.placeholder = 'example@mail.ru';
+                    break;
+                case 'vk':
+                    label.textContent = 'VK chat_id';
+                    input.placeholder = '123456789';
+                    break;
+                case 'max':
+                    label.textContent = 'Max user_id';
+                    input.placeholder = '123456';
+                    break;
+            }
         }
 
         async function sendPdf() {
-            const recipientId = document.getElementById('recipientSelect').value;
+            const recipient = document.getElementById('recipientInput').value.trim();
 
-            if (!recipientId || !selectedChannel) {
-                showStatus('Выберите получателя и канал', 'error');
+            if (!recipient || !selectedChannel) {
+                showStatus('Введите адресат и выберите канал', 'error');
                 return;
             }
 
-            const recipient = recipients.find(r => r.id == recipientId);
             const btn = document.getElementById('sendModalBtn');
 
             btn.classList.add('loading');
