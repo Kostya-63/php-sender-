@@ -60,11 +60,11 @@ try {
             }
             break;
 
-        case '/api/recipients':
+        case '/api/channels':
             if ($method === 'GET') {
                 require_once __DIR__ . '/../app/controllers/PdfController.php';
                 $controller = new \App\Controllers\PdfController();
-                echo json_encode($controller->getRecipients(), JSON_UNESCAPED_UNICODE);
+                echo json_encode($controller->getChannels(), JSON_UNESCAPED_UNICODE);
             } else {
                 http_response_code(405);
                 echo json_encode(['error' => 'Method not allowed']);

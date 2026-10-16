@@ -10,38 +10,28 @@ use PHPMailer\PHPMailer\Exception;
  */
 class EmailService extends MessengerService
 {
-    public function send(string $pdfContent, string $filename, mixed $recipient): MessengerResult
+    public function send(string $pdfContent, string $filename, array $config): MessengerResult
     {
         try {
             $mail = new PHPMailer(true);
             
             // SMTP настройки
             $mail->isSMTP();
-            $mail->Host = $this->config['smtp_host'];
-            $mail->Port = $this->config['smtp_port'];
+            $mail->Host = $config['smtp_host'];
+            $mail->Port = $config['smtp_port'];
             $mail->SMTPAuth = true;
-            $mail->Username = $this->config['smtp_user'];
-            $mail->Password = $this->config['smtp_pass'];
+            $mail->Username = $config['smtp_user'];
+            $mail->Password = $config['smtp_pass'];
             $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
             
             // Отправитель и получатель
             $mail->setFrom(
-                $this->config['from_email'],
-                $this->config['from_name']
+                $config['from_email'],
+                $config['from_name']
             );
             
-            // Извлекаем email из recipient
-            $toEmail = '';
-            if (is_string($recipient)) {
-                $toEmail = $recipient;
-            } elseif (is_array($recipient) && isset($recipient['email'])) {
-                $toEmail = $recipient['email'];
-            }
-            
-            if (!$toEmail) {
-                return MessengerResult::error('Не указан email получателя');
-            }
-            
+            // Email получателя берётся из smtp_user (отправляем самому себе)
+            $toEmail = $config['smtp_user'];
             $mail->addAddress($toEmail);
             
             // Содержимое

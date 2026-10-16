@@ -1,6 +1,9 @@
 /vendor/
-/.env
+/.env/
 /*.pdf
 /public/view.php
 /.gigacode
 /config/messengers.php
+/.gigaide/
+/.idea/
+.vscode/
