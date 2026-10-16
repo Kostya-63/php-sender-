@@ -42,13 +42,13 @@ class PdfController
 
     /**
      * Отправляет PDF через выбранный мессенджер
+     * Получатель берётся из config/messengers.php
      *
      * @return array ['success' => bool, 'message' => string, 'error' => string|null]
      */
     public function send(array $payload): array
     {
         $channel = $payload['channel'] ?? '';
-        $recipient = $payload['recipient'] ?? [];
         
         // Получаем PDF из сессии или генерируем заново
         $pdfBase64 = $payload['pdf_content'] ?? '';
@@ -75,7 +75,7 @@ class PdfController
         }
 
         try {
-            $result = $service->send($pdfContent, $filename, $recipient);
+            $result = $service->send($pdfContent, $filename, $this->messengerConfig);
 
             return [
                 'success' => $result->success,
@@ -92,39 +92,22 @@ class PdfController
     }
 
     /**
-     * Получить список получателей
+     * Получить список доступных каналов
      */
-    public function getRecipients(): array
+    public function getChannels(): array
     {
-        // TODO: Загрузить из БД портала
-        // Пока mock-данные для демонстрации
         return [
-            [
-                'id' => 1,
-                'name' => 'Иванов А.А.',
-                'role' => 'Преподаватель',
-                'department' => 'Математика',
-                'email' => 'ivanov@university.ru',
-                'vk_chat_id' => 1,
-                'max_user_id' => 123456,
+            'vk' => [
+                'name' => 'VK',
+                'enabled' => $this->messengerConfig['vk']['enabled'] ?? false,
             ],
-            [
-                'id' => 2,
-                'name' => 'Петрова В.Г.',
-                'role' => 'Преподаватель',
-                'department' => 'Физика',
-                'email' => 'petrova@university.ru',
-                'vk_chat_id' => 2,
-                'max_user_id' => 789012,
+            'max' => [
+                'name' => 'Max',
+                'enabled' => $this->messengerConfig['max']['enabled'] ?? false,
             ],
-            [
-                'id' => 3,
-                'name' => 'Сидоров К.М.',
-                'role' => 'Куратор',
-                'department' => 'Кафедра ИТ',
-                'email' => 'sidorov@university.ru',
-                'vk_chat_id' => 3,
-                'max_user_id' => 345678,
+            'email' => [
+                'name' => 'Email',
+                'enabled' => $this->messengerConfig['email']['enabled'] ?? false,
             ],
         ];
     }
@@ -140,16 +123,6 @@ class PdfController
                 return new EmailService($this->messengerConfig['email'] ?? []);
             default:
                 return null;
-        }
-    }
-
-    private function generatePdfContent(): ?string
-    {
-        try {
-            $pdfService = new PdfService();
-            return $pdfService->generate();
-        } catch (\Exception $e) {
-            return null;
         }
     }
 }

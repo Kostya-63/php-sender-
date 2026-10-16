@@ -10,17 +10,23 @@ class MaxService extends MessengerService
     private int $maxRetries = 3;
     private int $baseDelay = 2; // секунды
 
-    public function send(string $pdfContent, string $filename, mixed $recipient): MessengerResult
+    public function send(string $pdfContent, string $filename, array $config): MessengerResult
     {
         try {
+            // user_id берётся из config
+            $userId = $config['user_id'] ?? null;
+            if (!$userId) {
+                return MessengerResult::error('Не указан user_id в config/messengers.php');
+            }
+            
             // Шаг 1: Получить upload URL и token
-            [$uploadUrl, $token] = $this->getUploadUrl();
+            [$uploadUrl, $token] = $this->getUploadUrl($config);
             
             // Шаг 2: Загрузить файл
             $this->uploadFile($uploadUrl, $pdfContent, $filename);
             
             // Шаг 3: Отправить сообщение с вложением (с retry-логикой)
-            $result = $this->sendMessageWithRetry($token, $filename, $recipient);
+            $result = $this->sendMessageWithRetry($config, $token, $userId, $filename);
             
             if ($result['success']) {
                 return MessengerResult::success("PDF отправлен в Max");
@@ -38,9 +44,9 @@ class MaxService extends MessengerService
         return !empty($this->config['token']);
     }
 
-    private function getUploadUrl(): array
+    private function getUploadUrl(array $config): array
     {
-        $url = $this->config['api_url'] . '/uploads?type=file';
+        $url = $config['api_url'] . '/uploads?type=file';
         
         $ch = curl_init();
         curl_setopt_array($ch, [
@@ -48,7 +54,7 @@ class MaxService extends MessengerService
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_POST => true,
             CURLOPT_HTTPHEADER => [
-                'Authorization: ' . $this->config['token'],
+                'Authorization: ' . $config['token'],
                 'Content-Type: application/json',
             ],
             CURLOPT_TIMEOUT => 30,
@@ -95,14 +101,9 @@ class MaxService extends MessengerService
         }
     }
 
-    private function sendMessageWithRetry(string $token, string $filename, mixed $recipient): array
+    private function sendMessageWithRetry(array $config, string $token, int $userId, string $filename): array
     {
-        $userId = $this->config['user_id'] ?? $recipient['max_user_id'] ?? null;
-        if (!$userId) {
-            return ['success' => false, 'error' => 'Не указан user_id для отправки'];
-        }
-        
-        $url = $this->config['api_url'] . "/messages?user_id={$userId}";
+        $url = $config['api_url'] . "/messages?user_id={$userId}";
         
         for ($attempt = 1; $attempt <= $this->maxRetries; $attempt++) {
             // Пауза перед отправкой (после загрузки файла)
@@ -117,7 +118,7 @@ class MaxService extends MessengerService
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_POST => true,
                 CURLOPT_HTTPHEADER => [
-                    'Authorization: ' . $this->config['token'],
+                    'Authorization: ' . $config['token'],
                     'Content-Type: application/json',
                 ],
                 CURLOPT_POSTFIELDS => json_encode([

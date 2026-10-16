@@ -10,11 +10,17 @@ class VkService extends MessengerService
     private string $apiUrl = 'https://api.vk.com/method';
     private string $version = '5.131';
 
-    public function send(string $pdfContent, string $filename, mixed $recipient): MessengerResult
+    public function send(string $pdfContent, string $filename, array $config): MessengerResult
     {
         try {
+            // chat_id берётся из config
+            $chatId = $config['chat_id'] ?? null;
+            if (!$chatId) {
+                return MessengerResult::error('Не указан chat_id в config/messengers.php');
+            }
+            
             // Шаг 1: Получить upload server URL
-            $uploadServerUrl = $this->getUploadServerUrl();
+            $uploadServerUrl = $this->getUploadServerUrl($config, $chatId);
             
             // Шаг 2: Загрузить PDF на сервер
             $response = $this->uploadFile($uploadServerUrl, $pdfContent, $filename);
@@ -26,12 +32,7 @@ class VkService extends MessengerService
             }
             
             // Шаг 4: Отправить сообщение с документом
-            $chatId = $this->config['chat_id'] ?? $recipient['vk_chat_id'] ?? null;
-            if (!$chatId) {
-                return MessengerResult::error('Не указан chat_id для отправки');
-            }
-            
-            $result = $this->sendMessage($chatId, $fileData['file_data'], $filename);
+            $result = $this->sendMessage($config, $chatId, $fileData['file_data'], $filename);
             
             if ($result['success']) {
                 return MessengerResult::success("PDF отправлен в VK (chat_id: {$chatId})");
@@ -49,16 +50,16 @@ class VkService extends MessengerService
         return !empty($this->config['token']);
     }
 
-    private function getUploadServerUrl(): string
+    private function getUploadServerUrl(array $config, int $chatId): string
     {
         $url = "{$this->apiUrl}/messages.getUploadServer?type=doc&v={$this->version}";
-        $url .= "&chat_id=" . ($this->config['chat_id'] ?? '');
+        $url .= "&chat_id={$chatId}";
         
         $ch = curl_init();
         curl_setopt_array($ch, [
             CURLOPT_URL => $url,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => ['Authorization: oauth ' . $this->config['token']],
+            CURLOPT_HTTPHEADER => ['Authorization: oauth ' . $config['token']],
             CURLOPT_TIMEOUT => 30,
         ]);
         
@@ -102,7 +103,7 @@ class VkService extends MessengerService
         return $response;
     }
 
-    private function sendMessage(int $chatId, string $fileData, string $filename): array
+    private function sendMessage(array $config, int $chatId, string $fileData, string $filename): array
     {
         $url = "{$this->apiUrl}/messages.send?chat_id={$chatId}&v={$this->version}";
         $url .= "&attachment=doc" . $fileData;
@@ -112,7 +113,7 @@ class VkService extends MessengerService
         curl_setopt_array($ch, [
             CURLOPT_URL => $url,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => ['Authorization: oauth ' . $this->config['token']],
+            CURLOPT_HTTPHEADER => ['Authorization: oauth ' . $config['token']],
             CURLOPT_TIMEOUT => 30,
         ]);
         
