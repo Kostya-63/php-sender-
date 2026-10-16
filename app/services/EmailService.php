@@ -10,28 +10,31 @@ use PHPMailer\PHPMailer\Exception;
  */
 class EmailService extends MessengerService
 {
-    public function send(string $pdfContent, string $filename, array $config): MessengerResult
+    public function send(string $pdfContent, string $filename, mixed $recipient): MessengerResult
     {
         try {
             $mail = new PHPMailer(true);
             
             // SMTP настройки
             $mail->isSMTP();
-            $mail->Host = $config['smtp_host'];
-            $mail->Port = $config['smtp_port'];
+            $mail->Host = $this->config['smtp_host'];
+            $mail->Port = $this->config['smtp_port'];
             $mail->SMTPAuth = true;
-            $mail->Username = $config['smtp_user'];
-            $mail->Password = $config['smtp_pass'];
+            $mail->Username = $this->config['smtp_user'];
+            $mail->Password = $this->config['smtp_pass'];
             $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
             
-            // Отправитель и получатель
+            // Отправитель
             $mail->setFrom(
-                $config['from_email'],
-                $config['from_name']
+                $this->config['from_email'],
+                $this->config['from_name']
             );
             
-            // Email получателя берётся из smtp_user (отправляем самому себе)
-            $toEmail = $config['smtp_user'];
+            // Получатель
+            $toEmail = (string) $recipient;
+            if (!$toEmail) {
+                return MessengerResult::error('Не указан email получателя');
+            }
             $mail->addAddress($toEmail);
             
             // Содержимое
@@ -44,7 +47,7 @@ class EmailService extends MessengerService
                 <p>С уважением,<br>Студенческий портал</p>
             ";
             
-            // Attachment (бинарные данные)
+            // Attachment
             $mail->addStringAttachment($pdfContent, $filename, 'base64', 'application/pdf');
             
             // Отправка
