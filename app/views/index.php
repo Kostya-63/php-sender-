@@ -133,88 +133,6 @@
             color: #999;
             font-size: 13px;
         }
-
-        /* Modal */
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal-overlay.active { display: flex; }
-
-        .modal {
-            background: #fff;
-            border-radius: 12px;
-            padding: 30px;
-            width: 90%;
-            max-width: 500px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        }
-
-        .modal h2 {
-            margin-bottom: 20px;
-            color: #1a1a2e;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 500;
-            color: #333;
-        }
-
-        .form-group select,
-        .form-group input {
-            width: 100%;
-            padding: 10px 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 14px;
-        }
-
-        .channel-options {
-            display: flex;
-            gap: 12px;
-        }
-
-        .channel-option {
-            flex: 1;
-            padding: 12px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .channel-option:hover { border-color: #007bff; }
-        .channel-option.selected { border-color: #007bff; background: #e7f1ff; }
-
-        .channel-option .icon { font-size: 24px; margin-bottom: 4px; }
-        .channel-option .name { font-size: 13px; font-weight: 500; }
-
-        .modal-actions {
-            display: flex;
-            gap: 12px;
-            justify-content: flex-end;
-            margin-top: 24px;
-        }
-
-        .btn-cancel {
-            background: #6c757d;
-            color: white;
-        }
-
-        .btn-cancel:hover { background: #5a6268; }
     </style>
 </head>
 <body>
@@ -225,9 +143,9 @@
                 <span class="spinner"></span>
                 <span>Создать документ</span>
             </button>
-            <button class="btn btn-success" id="sendBtn" onclick="openSendModal()" disabled>
+            <button class="btn btn-success" id="copyBtn" onclick="copyToClipboard()" disabled>
                 <span class="spinner"></span>
-                <span>Отправить отчёт</span>
+                <span>Скачать PDF</span>
             </button>
         </div>
     </div>
@@ -250,52 +168,13 @@
 
     <div class="footer">PHP Sender &copy; 2026</div>
 
-    <!-- Modal -->
-    <div class="modal-overlay" id="sendModal">
-        <div class="modal">
-            <h2>📤 Отправить отчёт</h2>
-
-            <div class="form-group">
-                <label id="recipientLabel">Адресат</label>
-                <input type="text" id="recipientInput" value="kostikpetrov1986@yandex.ru" placeholder="Введите email или ID">
-            </div>
-
-            <div class="form-group">
-                <label>Канал</label>
-                <div class="channel-options">
-                    <div class="channel-option" data-channel="vk" onclick="selectChannel('vk')">
-                        <div class="icon">💬</div>
-                        <div class="name">VK</div>
-                    </div>
-                    <div class="channel-option" data-channel="max" onclick="selectChannel('max')">
-                        <div class="icon">📱</div>
-                        <div class="name">Max</div>
-                    </div>
-                    <div class="channel-option" data-channel="email" onclick="selectChannel('email')">
-                        <div class="icon">📧</div>
-                        <div class="name">Email</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="modal-actions">
-                <button class="btn btn-cancel" onclick="closeSendModal()">Отмена</button>
-                <button class="btn btn-success" id="sendModalBtn" onclick="sendPdf()">
-                    <span class="spinner"></span>
-                    <span>Отправить</span>
-                </button>
-            </div>
-        </div>
-    </div>
-
     <script>
         let pdfGenerated = false;
-        let pdfBase64 = '';
-        let selectedChannel = '';
+        let pdfBlob = null;
 
         async function createPdf() {
             const btn = document.getElementById('createBtn');
-            const sendBtn = document.getElementById('sendBtn');
+            const copyBtn = document.getElementById('copyBtn');
             const placeholder = document.getElementById('placeholder');
             const viewer = document.getElementById('pdfViewer');
             const status = document.getElementById('status');
@@ -314,15 +193,20 @@
                 const result = await response.json();
 
                 if (result.success && result.data) {
-                    const pdfBlob = base64ToBlob(result.data, 'application/pdf');
+                    const bytes = atob(result.data);
+                    const ab = new ArrayBuffer(bytes.length);
+                    const ua = new Uint8Array(ab);
+                    for (let i = 0; i < bytes.length; i++) {
+                        ua[i] = bytes.charCodeAt(i);
+                    }
+                    pdfBlob = new Blob([ab], { type: 'application/pdf' });
                     const pdfUrl = URL.createObjectURL(pdfBlob);
 
                     viewer.src = pdfUrl;
                     viewer.style.display = 'block';
                     placeholder.style.display = 'none';
                     pdfGenerated = true;
-                    pdfBase64 = result.data;
-                    sendBtn.disabled = false;
+                    copyBtn.disabled = false;
 
                     showStatus('Документ успешно создан!', 'success');
                 } else {
@@ -336,98 +220,37 @@
             }
         }
 
-        async function openSendModal() {
-            if (!pdfGenerated) return;
-
-            const modal = document.getElementById('sendModal');
-            const input = document.getElementById('recipientInput');
-
-            modal.classList.add('active');
-            input.value = 'kostikpetrov1986@yandex.ru';
-            input.placeholder = 'example@mail.ru';
-
-            // Email выбран по умолчанию
-            selectedChannel = 'email';
-            document.querySelectorAll('.channel-option').forEach(el => el.classList.remove('selected'));
-            document.querySelector('[data-channel="email"]').classList.add('selected');
-        }
-
-        function closeSendModal() {
-            document.getElementById('sendModal').classList.remove('active');
-        }
-
-        function selectChannel(channel) {
-            selectedChannel = channel;
-            document.querySelectorAll('.channel-option').forEach(el => el.classList.remove('selected'));
-            document.querySelector(`[data-channel="${channel}"]`).classList.add('selected');
-            
-            const input = document.getElementById('recipientInput');
-            const label = document.getElementById('recipientLabel');
-            switch(channel) {
-                case 'email':
-                    label.textContent = 'Email';
-                    input.placeholder = 'example@mail.ru';
-                    break;
-                case 'vk':
-                    label.textContent = 'VK chat_id';
-                    input.placeholder = '123456789';
-                    break;
-                case 'max':
-                    label.textContent = 'Max user_id';
-                    input.placeholder = '123456';
-                    break;
-            }
-        }
-
-        async function sendPdf() {
-            const recipient = document.getElementById('recipientInput').value.trim();
-
-            if (!recipient || !selectedChannel) {
-                showStatus('Введите адресат и выберите канал', 'error');
+        async function copyToClipboard() {
+            if (!pdfBlob || !pdfGenerated) {
+                showStatus('Сначала создайте документ', 'error');
                 return;
             }
 
-            const btn = document.getElementById('sendModalBtn');
+            const btn = document.getElementById('copyBtn');
 
             btn.classList.add('loading');
             btn.disabled = true;
 
             try {
-                const response = await fetch('/api/send', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        channel: selectedChannel,
-                        recipient: recipient,
-                        pdf_content: pdfBase64,
-                        filename: 'отчёт.pdf'
-                    })
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    showStatus(result.message, 'success');
-                    closeSendModal();
-                } else {
-                    showStatus('Ошибка: ' + (result.error || 'Не удалось отправить'), 'error');
-                }
+                downloadPdf();
+                showStatus('Файл скачан. Вставьте из папки загрузок (Ctrl+V в проводник)', 'success');
             } catch (error) {
-                showStatus('Ошибка соединения: ' + error.message, 'error');
+                showStatus('Ошибка: ' + error.message, 'error');
             } finally {
                 btn.classList.remove('loading');
                 btn.disabled = false;
             }
         }
 
-        function base64ToBlob(base64, mimeType) {
-            const bytes = atob(base64);
-            const ab = new ArrayBuffer(bytes.length);
-            const ua = new Uint8Array(ab);
-            for (let i = 0; i < bytes.length; i++) {
-                ua[i] = bytes.charCodeAt(i);
-            }
-            return new Blob([ab], { type: mimeType });
+        function downloadPdf() {
+            const url = URL.createObjectURL(pdfBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'отчёт.pdf';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }
 
         function showStatus(message, type) {
